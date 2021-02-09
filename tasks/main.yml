@@ -27,17 +27,23 @@
       name: "{{ packages }}"
       state: present
 
-  - name: Install packages for DHCP/PXE install
+  - name: Install packages for DHCP install
     package:
       name: "{{ dhcppkgs }}"
       state: present
     when: not staticips
 
+  - name: Install packages for PXE install
+    package:
+      name: "{{ tftppkgs }}"
+      state: present
+    when: tftp
+
   - name: Install additional package for Intel platforms
     package:
       name: "{{ syslinuxpkgs }}"
       state: present
-    when: not staticips and not ppc64le
+    when: (not staticips or tftp) and not ppc64le
 
   - name: Remove existing config files
     import_tasks: remove_old_config_files.yaml
@@ -194,18 +200,18 @@
       mode: 0755
     notify:
       - restart tftp
-    when: not staticips and not ppc64le
+    when: tftp and not ppc64le
 
   - name: generate netboot entry for grub2
     shell: grub2-mknetdir --net-directory=/var/lib/tftpboot
-    when: not staticips and ppc64le
+    when: tftp and ppc64le
 
   - name: Create TFTP RHCOS dir
     file:
       path: /var/lib/tftpboot/rhcos
       state: directory
       mode: 0755
-    when: not staticips
+    when: tftp
 
   - name: SEBool allow haproxy connect any port
     seboolean:
@@ -217,21 +223,21 @@
 
   - name: Copy over files needed for TFTP
     shell: "cp -a /usr/share/syslinux/* /var/lib/tftpboot"
-    when: not staticips and not ppc64le
+    when: tftp and not ppc64le
 
   - name: Downloading OCP4 installer initramfs
     get_url:
       url: "{{ ocp_initramfs }}"
       dest: /var/lib/tftpboot/rhcos/initramfs.img
       mode: 0555
-    when: not staticips
+    when: tftp
 
   - name: Downloading OCP4 installer kernel
     get_url:
       url: "{{ ocp_install_kernel }}"
       dest: /var/lib/tftpboot/rhcos/kernel
       mode: 0555
-    when: not staticips
+    when: tftp
 
   - name: Generate pxe config files
     block:
@@ -273,7 +279,7 @@
       when:
         - workers is defined
         - workers | length > 0
-    when: not staticips and not ppc64le
+    when: tftp and not ppc64le
 
   - name: Prepare UEFI netboot configuration
     block:
@@ -330,7 +336,7 @@
       when:
         - workers is defined
         - workers | length > 0
-    when: not staticips and not ppc64le and uefi
+    when: tftp and not ppc64le and uefi
 
   - name: Generate grub2 config files
     block:
@@ -373,7 +379,7 @@
       when:
         - workers is defined
         - workers | length > 0
-    when: not staticips and ppc64le and (("metal" in ocp_bios) or ("rootfs" in ocp_bios))
+    when: tftp and ppc64le and (("metal" in ocp_bios) or ("rootfs" in ocp_bios))
 
 
   - name: Installing TFTP Systemd helper
@@ -381,19 +387,19 @@
       src: ../files/start-tftp.sh
       dest: /usr/local/bin/start-tftp.sh
       mode: '0555'
-    when: not staticips
+    when: tftp
 
   - name: Installing TFTP Systemd unit file
     copy:
       src: ../files/helper-tftp.service
       dest: /etc/systemd/system/helper-tftp.service
       mode: '0655'
-    when: not staticips
+    when: tftp
 
   - name: Systemd daemon reload
     systemd:
       daemon_reload: yes
-    when: not staticips
+    when: not staticips or tftp
 
   - name: Starting services
     service:
@@ -403,16 +409,24 @@
     with_items:
       - "{{ services }}"
 
-  - name: Starting DHCP/PXE services
+  - name: Starting DHCP services
     service:
       name: "{{ item }}"
       enabled: yes
       state: started
     with_items:
-      - dhcpd
+      - dhcp-server
+    when: not staticips
+
+  - name: Starting PXE service
+    service:
+      name: "{{ item }}"
+      enabled: yes
+      state: started
+    with_items:
       - tftp
       - helper-tftp
-    when: not staticips
+    when: tftp
 
   - name: Unmasking Services
     systemd:
@@ -421,7 +435,7 @@
       masked: no
     with_items:
       - tftp
-    when: not staticips
+    when: tftp
 
   - name: Copy info script over
     template:

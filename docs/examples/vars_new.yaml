@@ -1,0 +1,35 @@
+staticips: true
+tftp: true
+disk: vda
+helper:
+  name: "helper"
+  ipaddr: "192.168.3.9"
+  networkifacename: "eth1"
+dns:
+  domain: "dev.decs.online"
+  clusterid: "oshift01"
+  forwarder1: "192.168.3.1"
+dhcp:
+  router: "192.168.3.1"
+  bcast: "192.168.3.255"
+  netmask: "255.255.255.0"
+  poolstart: "192.168.3.2"
+  poolend: "192.168.3.254"
+  ipid: "192.168.3.0"
+  netmaskid: "255.255.255.0"  
+bootstrap:
+  name: "bootstrap"
+  ipaddr: "192.168.3.10"
+masters:
+  - name: "master1"
+    ipaddr: "192.168.3.12"
+  - name: "master2"
+    ipaddr: "192.168.3.13"
+  - name: "master3"
+    ipaddr: "192.168.3.11"
+workers:
+  - name: "worker1"
+    ipaddr: "192.168.3.14"
+  - name: "worker2"
+    ipaddr: "192.168.3.15"
+
